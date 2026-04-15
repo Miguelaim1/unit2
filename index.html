@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 2 English Tutor</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 760px;
+      margin: 32px auto;
+      padding: 0 16px;
+      line-height: 1.5;
+      background: #ffffff;
+      color: #222;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+    }
+
+    .sub {
+      color: #555;
+      margin-bottom: 16px;
+    }
+
+    #chat {
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 16px;
+      min-height: 320px;
+      max-height: 520px;
+      overflow-y: auto;
+      background: #fafafa;
+      margin-bottom: 12px;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    input {
+      flex: 1;
+      min-width: 240px;
+      padding: 10px;
+      font-size: 16px;
+    }
+
+    button {
+      padding: 10px 14px;
+      font-size: 16px;
+      cursor: pointer;
+      border: 1px solid #bbb;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    #status {
+      color: #555;
+      font-size: 14px;
+      margin-top: 6px;
+    }
+
+    .hint {
+      font-size: 14px;
+      color: #666;
+      margin-top: 8px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    .you b {
+      color: #0a58ca;
+    }
+
+    .tutor b {
+      color: #198754;
+    }
+
+    .error b {
+      color: #c1121f;
+    }
+  </style>
+</head>
+<body>
+  <h1>Chapter 2 English Tutor 🎧</h1>
+  <div class="sub">
+    Speak in simple English. The tutor will praise you, correct you, and ask one short next question.
+  </div>
+
+  <div id="chat"></div>
+
+  <div class="row">
+    <input id="input" type="text" placeholder="Type here or use the microphone..." />
+    <button id="sendButton" type="button">Send</button>
+  </div>
+
+  <div class="row">
+    <button id="micButton" type="button">🎤 Start speaking</button>
+    <button id="stopVoiceButton" type="button">🔇 Stop voice</button>
+    <button id="clearButton" type="button">🧹 Clear chat</button>
+  </div>
+
+  <div id="status">Ready.</div>
+  <div class="hint">Best in Chrome or Edge.</div>
+
+  <script>
+    const chat = document.getElementById("chat");
+    const inputBox = document.getElementById("input");
+    const statusBox = document.getElementById("status");
+    const sendButton = document.getElementById("sendButton");
+    const micButton = document.getElementById("micButton");
+    const stopVoiceButton = document.getElementById("stopVoiceButton");
+    const clearButton = document.getElementById("clearButton");
+
+    let currentAudio = null;
+    let isSending = false;
+    let speechTimeout = null;
+    let liveTranscript = "";
+    let history = [];
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function addChatLine(cssClass, label, text) {
+      chat.innerHTML += `<p class="${cssClass}"><b>${label}</b> ${escapeHtml(text)}</p>`;
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function stopAudio() {
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        currentAudio = null;
+      }
+    }
+
+    function playAudio(base64Audio) {
+      stopAudio();
+      currentAudio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+      currentAudio.play().catch((error) => {
+        statusBox.textContent = "Audio play error: " + error.message;
+      });
+    }
+
+    async function sendMessage(messageOverride = null) {
+      if (isSending) return;
+
+      const message = (messageOverride ?? inputBox.value).trim();
+      if (!message) return;
+
+      isSending = true;
+      sendButton.disabled = true;
+      micButton.disabled = true;
+
+      addChatLine("you", "You:", message);
+      inputBox.value = "";
+      statusBox.textContent = "Thinking...";
+
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            history: history,
+            message: message
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          addChatLine("error", "Error:", data.error || "Unknown error");
+          statusBox.textContent = "Error.";
+          return;
+        }
+
+        const reply = data.reply || "Nice try. Please say it again.";
+        addChatLine("tutor", "Tutor:", reply);
+
+        history.push({ role: "user", content: message });
+        history.push({ role: "assistant", content: reply });
+
+        if (history.length > 16) {
+          history = history.slice(-16);
+        }
+
+        if (data.audio) {
+          statusBox.textContent = "Tutor is speaking...";
+          playAudio(data.audio);
+        } else {
+          statusBox.textContent = "Tutor replied.";
+        }
+      } catch (error) {
+        addChatLine("error", "Error:", error.message);
+        statusBox.textContent = "Network error.";
+      } finally {
+        isSending = false;
+        sendButton.disabled = false;
+        micButton.disabled = false;
+      }
+    }
+
+    sendButton.addEventListener("click", function () {
+      sendMessage();
+    });
+
+    inputBox.addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        sendMessage();
+      }
+    });
+
+    stopVoiceButton.addEventListener("click", function () {
+      stopAudio();
+      statusBox.textContent = "Voice stopped.";
+    });
+
+    clearButton.addEventListener("click", function () {
+      stopAudio();
+      history = [];
+      chat.innerHTML = "";
+      inputBox.value = "";
+      statusBox.textContent = "Chat cleared.";
+    });
+
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    let recognition = null;
+
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = true;
+      recognition.continuous = true;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = function () {
+        liveTranscript = "";
+        clearTimeout(speechTimeout);
+        statusBox.textContent = "Listening...";
+      };
+
+      recognition.onresult = function (event) {
+        let combined = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          combined += event.results[i][0].transcript + " ";
+        }
+
+        liveTranscript = (liveTranscript + " " + combined).trim();
+        inputBox.value = liveTranscript;
+        statusBox.textContent = "Heard: " + liveTranscript;
+
+        clearTimeout(speechTimeout);
+        speechTimeout = setTimeout(() => {
+          const finalText = inputBox.value.trim();
+          if (finalText) {
+            try {
+              recognition.stop();
+            } catch (e) {}
+            sendMessage(finalText);
+            liveTranscript = "";
+          }
+        }, 3000);
+      };
+
+      recognition.onerror = function (event) {
+        statusBox.textContent = "Mic error: " + event.error;
+      };
+
+      recognition.onend = function () {
+        clearTimeout(speechTimeout);
+        if (!isSending && statusBox.textContent === "Listening...") {
+          statusBox.textContent = "Stopped listening.";
+        }
+      };
+
+      micButton.addEventListener("click", function () {
+        if (isSending) return;
+
+        stopAudio();
+        clearTimeout(speechTimeout);
+        liveTranscript = "";
+        inputBox.value = "";
+
+        try {
+          recognition.start();
+          statusBox.textContent = "Trying to listen...";
+        } catch (error) {
+          statusBox.textContent = "Mic start error: " + error.message;
+        }
+      });
+    } else {
+      micButton.disabled = true;
+      statusBox.textContent = "Speech recognition is not supported in this browser. Try Chrome.";
+    }
+
+    addChatLine(
+      "tutor",
+      "Tutor:",
+      "Hi. Let's practice Chapter 2 English. What time do you usually get up?"
+    );
+    history.push({
+      role: "assistant",
+      content: "Hi. Let's practice Chapter 2 English. What time do you usually get up?"
+    });
+  </script>
+</body>
+</html>
