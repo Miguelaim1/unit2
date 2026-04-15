@@ -126,7 +126,6 @@
     let currentAudio = null;
     let isSending = false;
     let speechTimeout = null;
-    let liveTranscript = "";
     let history = [];
 
     function escapeHtml(text) {
@@ -252,34 +251,40 @@
       recognition.maxAlternatives = 1;
 
       recognition.onstart = function () {
-        liveTranscript = "";
+
         clearTimeout(speechTimeout);
         statusBox.textContent = "Listening...";
       };
 
-      recognition.onresult = function (event) {
-        let combined = "";
+recognition.onresult = function (event) {
+  let finalTranscript = "";
+  let interimTranscript = "";
 
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          combined += event.results[i][0].transcript + " ";
-        }
+  for (let i = 0; i < event.results.length; i++) {
+    const text = event.results[i][0].transcript;
+    if (event.results[i].isFinal) {
+      finalTranscript += text + " ";
+    } else {
+      interimTranscript += text + " ";
+    }
+  }
 
-        liveTranscript = (liveTranscript + " " + combined).trim();
-        inputBox.value = liveTranscript;
-        statusBox.textContent = "Heard: " + liveTranscript;
+  const fullTranscript = (finalTranscript + interimTranscript).trim();
+  inputBox.value = fullTranscript;
+  statusBox.textContent = "Heard: " + fullTranscript;
 
-        clearTimeout(speechTimeout);
-        speechTimeout = setTimeout(() => {
-          const finalText = inputBox.value.trim();
-          if (finalText) {
-            try {
-              recognition.stop();
-            } catch (e) {}
-            sendMessage(finalText);
-            liveTranscript = "";
-          }
-        }, 3000);
-      };
+  clearTimeout(speechTimeout);
+  speechTimeout = setTimeout(() => {
+    const finalText = inputBox.value.trim();
+    if (finalText) {
+      try {
+        recognition.stop();
+      } catch (e) {}
+      sendMessage(finalText);
+      inputBox.value = "";
+    }
+  }, 3000);
+};
 
       recognition.onerror = function (event) {
         statusBox.textContent = "Mic error: " + event.error;
