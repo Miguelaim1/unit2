@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chapter 2 English Tutor v5</title>
+  <title>Chapter 2 English Tutor v6</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -93,7 +93,7 @@
   </style>
 </head>
 <body>
-  <h1>Chapter 2 English Tutor v5🎧</h1>
+  <h1>Chapter 2 English Tutor v6🎧</h1>
   <div class="sub">
     Speak in simple English. The tutor will praise you, correct you, and ask one short next question.
   </div>
@@ -246,7 +246,7 @@
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
       recognition.lang = "en-US";
-      recognition.interimResults = true;
+      recognition.interimResults = false;
       recognition.continuous = true;
       recognition.maxAlternatives = 1;
 
@@ -257,17 +257,18 @@
       };
 
 recognition.onresult = function (event) {
-  let finalTranscript = "";
-  let interimTranscript = "";
+  const transcript = event.results[0][0].transcript.trim();
 
-  for (let i = 0; i < event.results.length; i++) {
-    const text = event.results[i][0].transcript;
-    if (event.results[i].isFinal) {
-      finalTranscript += text + " ";
-    } else {
-      interimTranscript += text + " ";
-    }
-  }
+  inputBox.value = transcript;
+  statusBox.textContent = "Heard: " + transcript;
+
+  setTimeout(() => {
+    try {
+      recognition.stop();
+    } catch (e) {}
+    sendMessage(transcript);
+  }, 1000); // small delay
+};
 
   const fullTranscript = (finalTranscript + interimTranscript).trim();
   inputBox.value = fullTranscript;
