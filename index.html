@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chapter 2 English Tutor v6</title>
+  <title>Chapter 2 English Tutor</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -93,9 +93,9 @@
   </style>
 </head>
 <body>
-  <h1>Chapter 2 English Tutor v6🎧</h1>
+  <h1>Chapter 2 English Tutor 🎧</h1>
   <div class="sub">
-    Speak in simple English. The tutor will praise you, correct you, and ask one short next question.
+    Speak in simple English. The tutor will praise you, correct big mistakes, and ask one short next question.
   </div>
 
   <div id="chat"></div>
@@ -125,8 +125,9 @@
 
     let currentAudio = null;
     let isSending = false;
-    let speechTimeout = null;
     let history = [];
+    let recognition = null;
+    let isListening = false;
 
     function escapeHtml(text) {
       const div = document.createElement("div");
@@ -236,79 +237,64 @@
       chat.innerHTML = "";
       inputBox.value = "";
       statusBox.textContent = "Chat cleared.";
+      addOpeningMessage();
     });
+
+    function addOpeningMessage() {
+      const opening = "Hi. Let's practice Chapter 2 English. What time do you usually get up?";
+      addChatLine("tutor", "Tutor:", opening);
+      history.push({
+        role: "assistant",
+        content: opening
+      });
+    }
 
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    let recognition = null;
 
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
       recognition.lang = "en-US";
       recognition.interimResults = false;
-      recognition.continuous = true;
+      recognition.continuous = false;
       recognition.maxAlternatives = 1;
 
       recognition.onstart = function () {
-
-        clearTimeout(speechTimeout);
+        isListening = true;
         statusBox.textContent = "Listening...";
       };
 
-recognition.onresult = function (event) {
-  const transcript = event.results[0][0].transcript.trim();
+      recognition.onresult = function (event) {
+        const transcript = event.results[0][0].transcript.trim();
+        inputBox.value = transcript;
+        statusBox.textContent = "Heard: " + transcript;
 
-  inputBox.value = transcript;
-  statusBox.textContent = "Heard: " + transcript;
-
-  setTimeout(() => {
-    try {
-      recognition.stop();
-    } catch (e) {}
-    sendMessage(transcript);
-  }, 1000); // small delay
-};
-
-  const fullTranscript = (finalTranscript + interimTranscript).trim();
-  inputBox.value = fullTranscript;
-  statusBox.textContent = "Heard: " + fullTranscript;
-
-  clearTimeout(speechTimeout);
-  speechTimeout = setTimeout(() => {
-    const finalText = inputBox.value.trim();
-    if (finalText) {
-      try {
-        recognition.stop();
-      } catch (e) {}
-      sendMessage(finalText);
-      inputBox.value = "";
-    }
-  }, 3000);
-};
+        setTimeout(() => {
+          sendMessage(transcript);
+        }, 700);
+      };
 
       recognition.onerror = function (event) {
+        isListening = false;
         statusBox.textContent = "Mic error: " + event.error;
       };
 
       recognition.onend = function () {
-        clearTimeout(speechTimeout);
-        if (!isSending && statusBox.textContent === "Listening...") {
+        isListening = false;
+        if (!isSending && !inputBox.value.trim()) {
           statusBox.textContent = "Stopped listening.";
         }
       };
 
       micButton.addEventListener("click", function () {
-        if (isSending) return;
+        if (isSending || isListening) return;
 
         stopAudio();
-        clearTimeout(speechTimeout);
-        liveTranscript = "";
         inputBox.value = "";
 
         try {
           recognition.start();
-          statusBox.textContent = "Trying to listen...";
+          statusBox.textContent = "Starting microphone...";
         } catch (error) {
           statusBox.textContent = "Mic start error: " + error.message;
         }
@@ -318,15 +304,7 @@ recognition.onresult = function (event) {
       statusBox.textContent = "Speech recognition is not supported in this browser. Try Chrome.";
     }
 
-    addChatLine(
-      "tutor",
-      "Tutor:",
-      "Hi. Let's practice Chapter 2 English. What time do you usually get up?"
-    );
-    history.push({
-      role: "assistant",
-      content: "Hi. Let's practice Chapter 2 English. What time do you usually get up?"
-    });
+    addOpeningMessage();
   </script>
 </body>
 </html>
