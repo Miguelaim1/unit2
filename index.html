@@ -13,6 +13,7 @@
       line-height: 1.5;
       background: #ffffff;
       color: #222;
+      text-align: center;
     }
 
     h1 {
@@ -32,47 +33,23 @@
       max-height: 520px;
       overflow-y: auto;
       background: #fafafa;
-      margin-bottom: 12px;
-    }
-
-    .row {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 10px;
-      flex-wrap: wrap;
-    }
-
-    input {
-      flex: 1;
-      min-width: 240px;
-      padding: 10px;
-      font-size: 16px;
+      margin-bottom: 20px;
+      text-align: left;
     }
 
     button {
-      padding: 10px 14px;
-      font-size: 16px;
+      padding: 16px 24px;
+      font-size: 18px;
       cursor: pointer;
       border: 1px solid #bbb;
-      border-radius: 8px;
+      border-radius: 12px;
       background: #fff;
-    }
-
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
     }
 
     #status {
       color: #555;
       font-size: 14px;
-      margin-top: 6px;
-    }
-
-    .hint {
-      font-size: 14px;
-      color: #666;
-      margin-top: 8px;
+      margin-top: 12px;
     }
 
     p {
@@ -86,64 +63,40 @@
     .tutor b {
       color: #198754;
     }
-
-    .error b {
-      color: #c1121f;
-    }
   </style>
 </head>
 <body>
+
   <h1>Chapter 2 English Tutor 🎧</h1>
   <div class="sub">
-    Speak in simple English. The tutor will praise you, correct big mistakes, and ask one short next question.
+    Tap the microphone and speak in English.
   </div>
 
   <div id="chat"></div>
 
-  <div class="row">
-    <input id="input" type="text" placeholder="Type here or use the microphone..." />
-    <button id="sendButton" type="button">Send</button>
-  </div>
-
-  <div class="row">
-    <button id="micButton" type="button">🎤 Start speaking</button>
-    <button id="stopVoiceButton" type="button">🔇 Stop voice</button>
-    <button id="clearButton" type="button">🧹 Clear chat</button>
-  </div>
+  <button id="micButton">🎤 Tap to speak</button>
 
   <div id="status">Ready.</div>
-  <div class="hint">Best in Chrome or Edge.</div>
 
   <script>
     const chat = document.getElementById("chat");
-    const inputBox = document.getElementById("input");
     const statusBox = document.getElementById("status");
-    const sendButton = document.getElementById("sendButton");
     const micButton = document.getElementById("micButton");
-    const stopVoiceButton = document.getElementById("stopVoiceButton");
-    const clearButton = document.getElementById("clearButton");
 
-    let currentAudio = null;
-    let isSending = false;
-    let history = [];
     let recognition = null;
     let isListening = false;
-
-    function escapeHtml(text) {
-      const div = document.createElement("div");
-      div.textContent = text;
-      return div.innerHTML;
-    }
+    let isSending = false;
+    let currentAudio = null;
+    let history = [];
 
     function addChatLine(cssClass, label, text) {
-      chat.innerHTML += `<p class="${cssClass}"><b>${label}</b> ${escapeHtml(text)}</p>`;
+      chat.innerHTML += `<p class="${cssClass}"><b>${label}</b> ${text}</p>`;
       chat.scrollTop = chat.scrollHeight;
     }
 
     function stopAudio() {
       if (currentAudio) {
         currentAudio.pause();
-        currentAudio.currentTime = 0;
         currentAudio = null;
       }
     }
@@ -151,31 +104,22 @@
     function playAudio(base64Audio) {
       stopAudio();
       currentAudio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
-      currentAudio.play().catch((error) => {
-        statusBox.textContent = "Audio play error: " + error.message;
-      });
+      currentAudio.play();
     }
 
-    async function sendMessage(messageOverride = null) {
+    async function sendMessage(message) {
       if (isSending) return;
 
-      const message = (messageOverride ?? inputBox.value).trim();
-      if (!message) return;
-
       isSending = true;
-      sendButton.disabled = true;
       micButton.disabled = true;
 
       addChatLine("you", "You:", message);
-      inputBox.value = "";
       statusBox.textContent = "Thinking...";
 
       try {
         const response = await fetch("/api/chat", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             history: history,
             message: message
@@ -184,21 +128,11 @@
 
         const data = await response.json();
 
-        if (!response.ok) {
-          addChatLine("error", "Error:", data.error || "Unknown error");
-          statusBox.textContent = "Error.";
-          return;
-        }
-
-        const reply = data.reply || "Nice try. Please say it again.";
+        const reply = data.reply || "Please try again.";
         addChatLine("tutor", "Tutor:", reply);
 
         history.push({ role: "user", content: message });
         history.push({ role: "assistant", content: reply });
-
-        if (history.length > 16) {
-          history = history.slice(-16);
-        }
 
         if (data.audio) {
           statusBox.textContent = "Tutor is speaking...";
@@ -206,47 +140,13 @@
         } else {
           statusBox.textContent = "Tutor replied.";
         }
+
       } catch (error) {
-        addChatLine("error", "Error:", error.message);
-        statusBox.textContent = "Network error.";
-      } finally {
-        isSending = false;
-        sendButton.disabled = false;
-        micButton.disabled = false;
+        statusBox.textContent = "Error.";
       }
-    }
 
-    sendButton.addEventListener("click", function () {
-      sendMessage();
-    });
-
-    inputBox.addEventListener("keydown", function (event) {
-      if (event.key === "Enter") {
-        sendMessage();
-      }
-    });
-
-    stopVoiceButton.addEventListener("click", function () {
-      stopAudio();
-      statusBox.textContent = "Voice stopped.";
-    });
-
-    clearButton.addEventListener("click", function () {
-      stopAudio();
-      history = [];
-      chat.innerHTML = "";
-      inputBox.value = "";
-      statusBox.textContent = "Chat cleared.";
-      addOpeningMessage();
-    });
-
-    function addOpeningMessage() {
-      const opening = "Hi. Let's practice Chapter 2 English. What time do you usually get up?";
-      addChatLine("tutor", "Tutor:", opening);
-      history.push({
-        role: "assistant",
-        content: opening
-      });
+      isSending = false;
+      micButton.disabled = false;
     }
 
     const SpeechRecognition =
@@ -257,7 +157,6 @@
       recognition.lang = "en-US";
       recognition.interimResults = false;
       recognition.continuous = false;
-      recognition.maxAlternatives = 1;
 
       recognition.onstart = function () {
         isListening = true;
@@ -266,45 +165,48 @@
 
       recognition.onresult = function (event) {
         const transcript = event.results[0][0].transcript.trim();
-        inputBox.value = transcript;
+
         statusBox.textContent = "Heard: " + transcript;
 
         setTimeout(() => {
           sendMessage(transcript);
-        }, 700);
-      };
-
-      recognition.onerror = function (event) {
-        isListening = false;
-        statusBox.textContent = "Mic error: " + event.error;
+        }, 500);
       };
 
       recognition.onend = function () {
         isListening = false;
-        if (!isSending && !inputBox.value.trim()) {
-          statusBox.textContent = "Stopped listening.";
-        }
+      };
+
+      recognition.onerror = function () {
+        isListening = false;
+        statusBox.textContent = "Mic error.";
       };
 
       micButton.addEventListener("click", function () {
-        if (isSending || isListening) return;
+        if (isListening || isSending) return;
 
         stopAudio();
-        inputBox.value = "";
 
         try {
           recognition.start();
-          statusBox.textContent = "Starting microphone...";
         } catch (error) {
-          statusBox.textContent = "Mic start error: " + error.message;
+          statusBox.textContent = "Mic start error.";
         }
       });
+
     } else {
       micButton.disabled = true;
-      statusBox.textContent = "Speech recognition is not supported in this browser. Try Chrome.";
+      statusBox.textContent = "Mic not supported. Use Chrome.";
+    }
+
+    function addOpeningMessage() {
+      const opening = "Hi. Let's practice Chapter 2 English. What time do you usually get up?";
+      addChatLine("tutor", "Tutor:", opening);
+      history.push({ role: "assistant", content: opening });
     }
 
     addOpeningMessage();
   </script>
+
 </body>
 </html>
